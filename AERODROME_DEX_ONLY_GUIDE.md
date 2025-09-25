@@ -41,15 +41,12 @@ This guide summarizes the changes required to run the protocol as a pure automat
 
 ## 4. Deployment & Scripts
 
-1. **Create a DEX-only script**  
-   - Start from `script/DeployCore.s.sol` but remove sections minting `Aero`, bootstrapping `VotingEscrow`, `Minter`, `Voter`, and reward factories. The minimal flow is: deploy `ProtocolForwarder` (optional), deploy `Pool` implementation, deploy `PoolFactory`, deploy `Router`, and set fee/pauser roles.  
-   - Produce a new artifact file (e.g., `script/constants/output/DeployDexOnly-*.json`) that records just these addresses.
+1. **Foundry 部署脚本**  
+   - 使用 `script/DeployDex.s.sol` 部署 `ProtocolForwarder`、`Pool` 实现、`PoolFactory` 与 `Router`，并根据环境变量写出 `script/constants/output/{OUTPUT_FILENAME}`。  
+   - 可复制 `script/constants/template.json` 生成多套配置（如不同网络），不再维护旧的 `DeployCore.s.sol`。
 
-2. **Retire redundant scripts**  
-   - Skip `script/DeployGaugesAndPools.s.sol`, `script/DeployGovernors.s.sol`, and airdrop scripts for this phase. Document in the README that these scripts are out-of-scope for DEX-only runs.
-
-3. **Hardhat tasks**  
-   - If you maintain `script/hardhat/DeployCore.ts`, mirror the trimmed deployment path there so contributors using Hardhat reach the same state.
+2. **移除遗留脚本**  
+   - `DeployGaugesAndPools`、`DeployGovernors`、`DistributeAirdrops` 等脚本已废弃，README 已标注仅保留 Foundry 流程；仓库不再提供 Hardhat 版本。
 
 ## 5. Build/Test Configuration
 
@@ -68,11 +65,11 @@ This guide summarizes the changes required to run the protocol as a pure automat
      ```
      Then run `forge build --profile dex` to exclude the ve stack.
 
-2. **Trim test targets**  
-   - Limit Foundry tests to the DEX suite: `Pool`, `PoolFactory`, `Router`, `PoolFees`, `Oracle`, `Imbalance`, and zap helpers (`test/Pool.t.sol`, `test/PoolFactory.t.sol`, `test/Router.t.sol`, etc.). Use `forge test --match-contract` filters or move ve-related tests under a separate `tests-ve` folder for later.
+2. **测试范围**  
+   - 仅保留核心 DEX 测试：`test/Pool.t.sol`、`test/PoolFactory.t.sol`、`test/PoolFees.t.sol`、`test/Router.t.sol`。其他 ve/激励相关测试已删除。
 
-3. **CI updates**  
-   - Update any GitHub Actions or local scripts to call the new profile and skip yarn tasks that depend on ve contracts (e.g., no need to generate gauge ABIs).
+3. **CI 更新**  
+   - CI 流程只需执行 `forge build`、`forge test` 以及 `yarn format:check`、`yarn lint:check`，无需再生成 TypeChain 或 Hardhat 产物。
 
 ## 6. Housekeeping
 
@@ -84,4 +81,3 @@ This guide summarizes the changes required to run the protocol as a pure automat
 ## 7. Re-enabling ve/mining (future)
 
 When you are ready to restore gauges and ve mechanics, revert the router staking hooks, point `PoolFactory` back to a live `Voter`, reintroduce the deployment steps, and re-enable the excluded tests/profile. Keeping the parked contracts untouched now will keep that diff manageable.
-

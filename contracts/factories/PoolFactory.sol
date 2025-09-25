@@ -19,9 +19,6 @@ contract PoolFactory is IPoolFactory {
     uint256 public constant ZERO_FEE_INDICATOR = 420;
     address public feeManager;
 
-    /// @dev used to change the name/symbol of the pool by calling emergencyCouncil
-    address public voter;
-
     mapping(address => mapping(address => mapping(bool => address))) private _getPool;
     address[] public allPools;
     mapping(address => bool) private _isPool; // simplified check if its a pool, given that `stable` flag might not be available in peripherals
@@ -33,7 +30,6 @@ contract PoolFactory is IPoolFactory {
 
     constructor(address _implementation) {
         implementation = _implementation;
-        voter = msg.sender;
         pauser = msg.sender;
         feeManager = msg.sender;
         isPaused = false;
@@ -62,12 +58,6 @@ contract PoolFactory is IPoolFactory {
     }
 
     /// @inheritdoc IPoolFactory
-    function setVoter(address _voter) external {
-        if (msg.sender != voter) revert NotVoter();
-        voter = _voter;
-        emit SetVoter(_voter);
-    }
-
     function setPauser(address _pauser) external {
         if (msg.sender != pauser) revert NotPauser();
         if (_pauser == address(0)) revert ZeroAddress();

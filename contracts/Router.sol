@@ -5,10 +5,7 @@ import {Math} from "@openzeppelin/contracts/utils/math/Math.sol";
 import {IPool} from "./interfaces/IPool.sol";
 import {IPoolFactory} from "./interfaces/factories/IPoolFactory.sol";
 import {IRouter} from "./interfaces/IRouter.sol";
-import {IVoter} from "./interfaces/IVoter.sol";
-import {IGauge} from "./interfaces/IGauge.sol";
-import {IFactoryRegistry} from "./interfaces/factories/IFactoryRegistry.sol";
-import {IWETH} from "./interfaces/IWETH.sol";
+import {IWHsk} from "./interfaces/IWHsk.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
@@ -21,17 +18,12 @@ import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 contract Router is IRouter, ERC2771Context {
     using SafeERC20 for IERC20;
 
-    /// @inheritdoc IRouter
-    address public immutable factoryRegistry;
-    /// @inheritdoc IRouter
     address public immutable defaultFactory;
     /// @inheritdoc IRouter
-    address public immutable voter;
-    /// @inheritdoc IRouter
-    IWETH public immutable weth;
+    IWHsk public immutable whsk;
     uint256 internal constant MINIMUM_LIQUIDITY = 10 ** 3;
     /// @inheritdoc IRouter
-    address public constant ETHER = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
+    address public constant HSK = 0xEeeeeEeeeEeEeeEeEeEeeEEEeeeeEeeeeeeeEEeE;
 
     modifier ensure(uint256 deadline) {
         _ensureDeadline(deadline);
@@ -44,19 +36,15 @@ contract Router is IRouter, ERC2771Context {
 
     constructor(
         address _forwarder,
-        address _factoryRegistry,
         address _factory,
-        address _voter,
-        address _weth
+        address _whsk
     ) ERC2771Context(_forwarder) {
-        factoryRegistry = _factoryRegistry;
         defaultFactory = _factory;
-        voter = _voter;
-        weth = IWETH(_weth);
+        whsk = IWHsk(_whsk);
     }
 
     receive() external payable {
-        if (msg.sender != address(weth)) revert OnlyWETH();
+        if (msg.sender != address(whsk)) revert OnlyWHsk();
     }
 
     /// @inheritdoc IRouter
@@ -70,7 +58,7 @@ contract Router is IRouter, ERC2771Context {
     function poolFor(address tokenA, address tokenB, bool stable, address _factory) public view returns (address pool) {
         address _defaultFactory = defaultFactory;
         address factory = _factory == address(0) ? _defaultFactory : _factory;
-        if (!IFactoryRegistry(factoryRegistry).isPoolFactoryApproved(factory)) revert PoolFactoryDoesNotExist();
+        if (factory != _defaultFactory) revert PoolFactoryDoesNotExist();
 
         (address token0, address token1) = sortTokens(tokenA, tokenB);
         bytes32 salt = keccak256(abi.encodePacked(token0, token1, stable));
@@ -230,31 +218,31 @@ contract Router is IRouter, ERC2771Context {
     }
 
     /// @inheritdoc IRouter
-    function addLiquidityETH(
+    function addLiquidityHSK(
         address token,
         bool stable,
         uint256 amountTokenDesired,
         uint256 amountTokenMin,
-        uint256 amountETHMin,
+        uint256 amountHSKMin,
         address to,
         uint256 deadline
-    ) external payable ensure(deadline) returns (uint256 amountToken, uint256 amountETH, uint256 liquidity) {
-        (amountToken, amountETH) = _addLiquidity(
+    ) external payable ensure(deadline) returns (uint256 amountToken, uint256 amountHSK, uint256 liquidity) {
+        (amountToken, amountHSK) = _addLiquidity(
             token,
-            address(weth),
+            address(whsk),
             stable,
             amountTokenDesired,
             msg.value,
             amountTokenMin,
-            amountETHMin
+            amountHSKMin
         );
-        address pool = poolFor(token, address(weth), stable, defaultFactory);
+        address pool = poolFor(token, address(whsk), stable, defaultFactory);
         _safeTransferFrom(token, _msgSender(), pool, amountToken);
-        weth.deposit{value: amountETH}();
-        assert(weth.transfer(pool, amountETH));
+        whsk.deposit{value: amountHSK}();
+        assert(whsk.transfer(pool, amountHSK));
         liquidity = IPool(pool).mint(to);
-        // refund dust eth, if any
-        if (msg.value > amountETH) _safeTransferETH(_msgSender(), msg.value - amountETH);
+        // refund dust HSK, if any
+        if (msg.value > amountHSK) _safeTransferHSK(_msgSender(), msg.value - amountHSK);
     }
 
     // **** REMOVE LIQUIDITY ****
@@ -280,53 +268,53 @@ contract Router is IRouter, ERC2771Context {
     }
 
     /// @inheritdoc IRouter
-    function removeLiquidityETH(
+    function removeLiquidityHSK(
         address token,
         bool stable,
         uint256 liquidity,
         uint256 amountTokenMin,
-        uint256 amountETHMin,
+        uint256 amountHSKMin,
         address to,
         uint256 deadline
-    ) public ensure(deadline) returns (uint256 amountToken, uint256 amountETH) {
-        (amountToken, amountETH) = removeLiquidity(
+    ) public ensure(deadline) returns (uint256 amountToken, uint256 amountHSK) {
+        (amountToken, amountHSK) = removeLiquidity(
             token,
-            address(weth),
+            address(whsk),
             stable,
             liquidity,
             amountTokenMin,
-            amountETHMin,
+            amountHSKMin,
             address(this),
             deadline
         );
         _safeTransfer(token, to, amountToken);
-        weth.withdraw(amountETH);
-        _safeTransferETH(to, amountETH);
+        whsk.withdraw(amountHSK);
+        _safeTransferHSK(to, amountHSK);
     }
 
     // **** REMOVE LIQUIDITY (supporting fee-on-transfer tokens) ****
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
+    function removeLiquidityHSKSupportingFeeOnTransferTokens(
         address token,
         bool stable,
         uint256 liquidity,
         uint256 amountTokenMin,
-        uint256 amountETHMin,
+        uint256 amountHSKMin,
         address to,
         uint256 deadline
-    ) public ensure(deadline) returns (uint256 amountETH) {
-        (, amountETH) = removeLiquidity(
+    ) public ensure(deadline) returns (uint256 amountHSK) {
+        (, amountHSK) = removeLiquidity(
             token,
-            address(weth),
+            address(whsk),
             stable,
             liquidity,
             amountTokenMin,
-            amountETHMin,
+            amountHSKMin,
             address(this),
             deadline
         );
         _safeTransfer(token, to, IERC20(token).balanceOf(address(this)));
-        weth.withdraw(amountETH);
-        _safeTransferETH(to, amountETH);
+        whsk.withdraw(amountHSK);
+        _safeTransferHSK(to, amountHSK);
     }
 
     // **** SWAP ****
@@ -369,28 +357,28 @@ contract Router is IRouter, ERC2771Context {
         _swap(amounts, routes, to);
     }
 
-    function swapExactETHForTokens(
+    function swapExactHSKForTokens(
         uint256 amountOutMin,
         Route[] calldata routes,
         address to,
         uint256 deadline
     ) external payable ensure(deadline) returns (uint256[] memory amounts) {
-        if (routes[0].from != address(weth)) revert InvalidPath();
+        if (routes[0].from != address(whsk)) revert InvalidPath();
         amounts = getAmountsOut(msg.value, routes);
         if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();
-        weth.deposit{value: amounts[0]}();
-        assert(weth.transfer(poolFor(routes[0].from, routes[0].to, routes[0].stable, routes[0].factory), amounts[0]));
+        whsk.deposit{value: amounts[0]}();
+        assert(whsk.transfer(poolFor(routes[0].from, routes[0].to, routes[0].stable, routes[0].factory), amounts[0]));
         _swap(amounts, routes, to);
     }
 
-    function swapExactTokensForETH(
+    function swapExactTokensForHSK(
         uint256 amountIn,
         uint256 amountOutMin,
         Route[] calldata routes,
         address to,
         uint256 deadline
     ) external ensure(deadline) returns (uint256[] memory amounts) {
-        if (routes[routes.length - 1].to != address(weth)) revert InvalidPath();
+        if (routes[routes.length - 1].to != address(whsk)) revert InvalidPath();
         amounts = getAmountsOut(amountIn, routes);
         if (amounts[amounts.length - 1] < amountOutMin) revert InsufficientOutputAmount();
         _safeTransferFrom(
@@ -400,8 +388,8 @@ contract Router is IRouter, ERC2771Context {
             amounts[0]
         );
         _swap(amounts, routes, address(this));
-        weth.withdraw(amounts[amounts.length - 1]);
-        _safeTransferETH(to, amounts[amounts.length - 1]);
+        whsk.withdraw(amounts[amounts.length - 1]);
+        _safeTransferHSK(to, amounts[amounts.length - 1]);
     }
 
     function UNSAFE_swapExactTokensForTokens(
@@ -466,16 +454,16 @@ contract Router is IRouter, ERC2771Context {
     }
 
     /// @inheritdoc IRouter
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+    function swapExactHSKForTokensSupportingFeeOnTransferTokens(
         uint256 amountOutMin,
         Route[] calldata routes,
         address to,
         uint256 deadline
     ) external payable ensure(deadline) {
-        if (routes[0].from != address(weth)) revert InvalidPath();
+        if (routes[0].from != address(whsk)) revert InvalidPath();
         uint256 amountIn = msg.value;
-        weth.deposit{value: amountIn}();
-        assert(weth.transfer(poolFor(routes[0].from, routes[0].to, routes[0].stable, routes[0].factory), amountIn));
+        whsk.deposit{value: amountIn}();
+        assert(whsk.transfer(poolFor(routes[0].from, routes[0].to, routes[0].stable, routes[0].factory), amountIn));
         uint256 _length = routes.length - 1;
         uint256 balanceBefore = IERC20(routes[_length].to).balanceOf(to);
         _swapSupportingFeeOnTransferTokens(routes, to);
@@ -483,14 +471,14 @@ contract Router is IRouter, ERC2771Context {
     }
 
     /// @inheritdoc IRouter
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    function swapExactTokensForHSKSupportingFeeOnTransferTokens(
         uint256 amountIn,
         uint256 amountOutMin,
         Route[] calldata routes,
         address to,
         uint256 deadline
     ) external ensure(deadline) {
-        if (routes[routes.length - 1].to != address(weth)) revert InvalidPath();
+        if (routes[routes.length - 1].to != address(whsk)) revert InvalidPath();
         _safeTransferFrom(
             routes[0].from,
             _msgSender(),
@@ -498,10 +486,10 @@ contract Router is IRouter, ERC2771Context {
             amountIn
         );
         _swapSupportingFeeOnTransferTokens(routes, address(this));
-        uint256 amountOut = weth.balanceOf(address(this));
+        uint256 amountOut = whsk.balanceOf(address(this));
         if (amountOut < amountOutMin) revert InsufficientOutputAmount();
-        weth.withdraw(amountOut);
-        _safeTransferETH(to, amountOut);
+        whsk.withdraw(amountOut);
+        _safeTransferHSK(to, amountOut);
     }
 
     /// @inheritdoc IRouter
@@ -512,18 +500,17 @@ contract Router is IRouter, ERC2771Context {
         Zap calldata zapInPool,
         Route[] calldata routesA,
         Route[] calldata routesB,
-        address to,
-        bool stake
+        address to
     ) external payable returns (uint256 liquidity) {
         uint256 amountIn = amountInA + amountInB;
         address _tokenIn = tokenIn;
         uint256 value = msg.value;
-        if (tokenIn == ETHER) {
-            if (amountIn != value) revert InvalidAmountInForETHDeposit();
-            _tokenIn = address(weth);
-            weth.deposit{value: value}();
+        if (tokenIn == HSK) {
+            if (amountIn != value) revert InvalidAmountInForHSKDeposit();
+            _tokenIn = address(whsk);
+            whsk.deposit{value: value}();
         } else {
-            if (value != 0) revert InvalidTokenInForETHDeposit();
+            if (value != 0) revert InvalidTokenInForHSKDeposit();
             _safeTransferFrom(_tokenIn, _msgSender(), address(this), amountIn);
         }
 
@@ -531,15 +518,7 @@ contract Router is IRouter, ERC2771Context {
         _zapInLiquidity(zapInPool);
         address pool = poolFor(zapInPool.tokenA, zapInPool.tokenB, zapInPool.stable, zapInPool.factory);
 
-        if (stake) {
-            liquidity = IPool(pool).mint(address(this));
-            address gauge = IVoter(voter).gauges(pool);
-            IERC20(pool).safeApprove(address(gauge), liquidity);
-            IGauge(gauge).deposit(liquidity, to);
-            IERC20(pool).safeApprove(address(gauge), 0);
-        } else {
-            liquidity = IPool(pool).mint(to);
-        }
+        liquidity = IPool(pool).mint(to);
 
         _returnAssets(tokenIn);
         _returnAssets(zapInPool.tokenA);
@@ -646,7 +625,7 @@ contract Router is IRouter, ERC2771Context {
     ) external {
         address tokenA = zapOutPool.tokenA;
         address tokenB = zapOutPool.tokenB;
-        address _tokenOut = (tokenOut == ETHER) ? address(weth) : tokenOut;
+        address _tokenOut = (tokenOut == HSK) ? address(whsk) : tokenOut;
         _zapOutLiquidity(liquidity, zapOutPool);
 
         uint256 balance;
@@ -727,15 +706,15 @@ contract Router is IRouter, ERC2771Context {
     }
 
     /// @dev Return residual assets from zapping.
-    /// @param token token to return, put `ETHER` if you want Ether back.
+    /// @param token token to return, put `HSK` if you want native HSK back.
     function _returnAssets(address token) internal {
         address sender = _msgSender();
         uint256 balance;
-        if (token == ETHER) {
-            balance = IERC20(weth).balanceOf(address(this));
+        if (token == HSK) {
+            balance = whsk.balanceOf(address(this));
             if (balance > 0) {
-                IWETH(weth).withdraw(balance);
-                _safeTransferETH(sender, balance);
+                whsk.withdraw(balance);
+                _safeTransferHSK(sender, balance);
             }
         } else {
             balance = IERC20(token).balanceOf(address(this));
@@ -770,9 +749,9 @@ contract Router is IRouter, ERC2771Context {
         return (investment * 1e18) / (ratio + 1e18);
     }
 
-    function _safeTransferETH(address to, uint256 value) internal {
+    function _safeTransferHSK(address to, uint256 value) internal {
         (bool success, ) = to.call{value: value}(new bytes(0));
-        if (!success) revert ETHTransferFailed();
+        if (!success) revert HSKTransferFailed();
     }
 
     function _safeTransfer(address token, address to, uint256 value) internal {

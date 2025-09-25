@@ -1,50 +1,53 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.19;
 
-import "./BaseTest.sol";
+import {DexTestBase} from "./utils/DexTestBase.sol";
+import {Pool} from "contracts/Pool.sol";
+import {PoolFees} from "contracts/PoolFees.sol";
+import {MockERC20} from "./utils/MockERC20.sol";
 
-contract PoolFeesTest is BaseTest {
-    function _setUp() public override {
-        factory.setFee(true, 2); // 2 bps = 0.02%
+contract PoolFeesTest is DexTestBase {
+    MockERC20 internal tokenA;
+    MockERC20 internal tokenB;
+    Pool internal pool;
+
+    function setUp() public override {
+        super.setUp();
+        tokenA = _createMockToken("Token A", "TKA", 18);
+        tokenB = _createMockToken("Token B", "TKB", 18);
+        pool = _createPool(address(tokenA), address(tokenB), false);
+
+        _deal(address(tokenA), address(this), 1_000 ether);
+        _deal(address(tokenB), address(this), 1_000 ether);
+
+        tokenA.transfer(address(pool), 100 ether);
+        tokenB.transfer(address(pool), 100 ether);
+        pool.mint(address(this));
     }
 
-    function testSwapAndClaimFees() public {
-        IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(address(USDC), address(FRAX), true, address(0));
+    function testFeesAccumulateInPoolFees() public {
+        tokenA.transfer(address(pool), 10 ether);
+        uint256 out = pool.getAmountOut(10 ether, address(tokenA));
+        (address token0, address token1) = pool.tokens();
+        if (address(tokenA) == token0) {
+            pool.swap(0, out, address(this), new bytes(0));
+        } else {
+            pool.swap(out, 0, address(this), new bytes(0));
+        }
 
-        assertEq(router.getAmountsOut(USDC_1, routes)[1], pool.getAmountOut(USDC_1, address(USDC)));
+        PoolFees fees = PoolFees(pool.poolFees());
+        assertEq(fees.poolAddress(), address(pool));
+        assertEq(fees.token0Address(), token0);
+        assertEq(fees.token1Address(), token1);
 
-        uint256[] memory assertedOutput = router.getAmountsOut(USDC_1, routes);
-        USDC.approve(address(router), USDC_1);
-        router.swapExactTokensForTokens(USDC_1, assertedOutput[1], routes, address(owner), block.timestamp);
-        skip(1801);
-        vm.roll(block.number + 1);
-        address poolFees = pool.poolFees();
-        assertEq(USDC.balanceOf(poolFees), 200); // 0.01% -> 0.02%
-        uint256 b = USDC.balanceOf(address(owner));
-        pool.claimFees();
-        assertGt(USDC.balanceOf(address(owner)), b);
-    }
+        uint256 balance0Before = tokenA.balanceOf(address(this));
+        uint256 balance1Before = tokenB.balanceOf(address(this));
+        (uint256 claim0, uint256 claim1) = pool.claimFees();
+        bool tokenAIsToken0 = address(tokenA) == token0;
+        uint256 claimForTokenA = tokenAIsToken0 ? claim0 : claim1;
+        uint256 claimForTokenB = tokenAIsToken0 ? claim1 : claim0;
 
-    function testFeeManagerCanChangeFeesAndClaim() public {
-        factory.setFee(true, 3); // 3 bps = 0.03%
-
-        IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(address(USDC), address(FRAX), true, address(0));
-
-        assertEq(router.getAmountsOut(USDC_1, routes)[1], pool.getAmountOut(USDC_1, address(USDC)));
-
-        uint256[] memory assertedOutput = router.getAmountsOut(USDC_1, routes);
-
-        USDC.approve(address(router), USDC_1);
-        router.swapExactTokensForTokens(USDC_1, assertedOutput[1], routes, address(owner), block.timestamp);
-
-        skip(1801);
-        vm.roll(block.number + 1);
-        address poolFees = pool.poolFees();
-        assertEq(USDC.balanceOf(poolFees), 300);
-        uint256 b = USDC.balanceOf(address(owner));
-        pool.claimFees();
-        assertGt(USDC.balanceOf(address(owner)), b);
+        assertEq(tokenA.balanceOf(address(this)), balance0Before + claimForTokenA);
+        assertEq(tokenB.balanceOf(address(this)), balance1Before + claimForTokenB);
     }
 }

@@ -13,7 +13,7 @@ interface IPool {
     error IsPaused();
     error InvalidTo();
     error K();
-    error NotEmergencyCouncil();
+    error NotMetadataAdmin();
 
     event Fees(address indexed sender, uint256 amount0, uint256 amount1);
     event Mint(address indexed sender, uint256 amount0, uint256 amount1);
@@ -100,12 +100,12 @@ interface IPool {
     function getK() external returns (uint256);
 
     /// @notice Set pool name
-    ///         Only callable by Voter.emergencyCouncil()
+    ///         Only callable by the metadata admin configured on the factory
     /// @param __name String of new name
     function setName(string calldata __name) external;
 
     /// @notice Set pool symbol
-    ///         Only callable by Voter.emergencyCouncil()
+    ///         Only callable by the metadata admin configured on the factory
     /// @param __symbol String of new symbol
     function setSymbol(string calldata __symbol) external;
 

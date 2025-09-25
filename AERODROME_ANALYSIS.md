@@ -232,7 +232,7 @@ sequenceDiagram
 ### 开发工具链
 
 - **Foundry**: 主要开发和测试框架
-- **Hardhat**: 辅助部署工具
+- **Foundry**: 核心测试与部署工具
 - **OpenZeppelin**: 安全合约库
 
 ### 网络支持

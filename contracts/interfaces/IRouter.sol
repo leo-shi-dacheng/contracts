@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import {IWETH} from "./IWETH.sol";
+import {IWHsk} from "./IWHsk.sol";
 
 interface IRouter {
     struct Route {
@@ -11,7 +11,7 @@ interface IRouter {
         address factory;
     }
 
-    error ETHTransferFailed();
+    error HSKTransferFailed();
     error Expired();
     error InsufficientAmount();
     error InsufficientAmountA();
@@ -21,31 +21,25 @@ interface IRouter {
     error InsufficientAmountAOptimal();
     error InsufficientLiquidity();
     error InsufficientOutputAmount();
-    error InvalidAmountInForETHDeposit();
-    error InvalidTokenInForETHDeposit();
+    error InvalidAmountInForHSKDeposit();
+    error InvalidTokenInForHSKDeposit();
     error InvalidPath();
     error InvalidRouteA();
     error InvalidRouteB();
-    error OnlyWETH();
+    error OnlyWHsk();
     error PoolDoesNotExist();
     error PoolFactoryDoesNotExist();
     error SameAddresses();
     error ZeroAddress();
 
-    /// @notice Address of FactoryRegistry.sol
-    function factoryRegistry() external view returns (address);
-
     /// @notice Address of Protocol PoolFactory.sol
     function defaultFactory() external view returns (address);
 
-    /// @notice Address of Voter.sol
-    function voter() external view returns (address);
+    /// @notice Interface of the wrapped HSK contract used for WHSK <=> HSK wrapping/unwrapping
+    function whsk() external view returns (IWHsk);
 
-    /// @notice Interface of WETH contract used for WETH => ETH wrapping/unwrapping
-    function weth() external view returns (IWETH);
-
-    /// @dev Represents Ether. Used by zapper to determine whether to return assets as ETH/WETH.
-    function ETHER() external view returns (address);
+    /// @dev Represents the native HSK placeholder address (used by zapper when handling wraps)
+    function HSK() external view returns (address);
 
     /// @dev Struct containing information necessary to zap in and out of pools
     /// @param tokenA           .
@@ -74,9 +68,9 @@ interface IRouter {
     /// @return token1  Higher address value between tokenA and tokenB
     function sortTokens(address tokenA, address tokenB) external pure returns (address token0, address token1);
 
-    /// @notice Calculate the address of a pool by its' factory.
+    /// @notice Calculate the address of a pool using the default factory or a provided override.
     ///         Used by all Router functions containing a `Route[]` or `_factory` argument.
-    ///         Reverts if _factory is not approved by the FactoryRegistry
+    ///         Reverts if a non-default factory is supplied.
     /// @dev Returns a randomly generated address for a nonexistent pool
     /// @param tokenA   Address of token to query
     /// @param tokenB   Address of token to query
@@ -168,7 +162,7 @@ interface IRouter {
         uint256 deadline
     ) external returns (uint256 amountA, uint256 amountB, uint256 liquidity);
 
-    /// @notice Add liquidity of a token and WETH (transferred as ETH) to a Pool
+    /// @notice Add liquidity of a token and WHSK (transferred as HSK) to a Pool
     /// @param token                .
     /// @param stable               True if pool is stable, false if volatile
     /// @param amountTokenDesired   Amount of token desired to deposit
@@ -179,7 +173,7 @@ interface IRouter {
     /// @return amountToken         Amount of token to actually deposit
     /// @return amountETH           Amount of tokenETH to actually deposit
     /// @return liquidity           Amount of liquidity token returned from deposit
-    function addLiquidityETH(
+    function addLiquidityHSK(
         address token,
         bool stable,
         uint256 amountTokenDesired,
@@ -213,7 +207,7 @@ interface IRouter {
         uint256 deadline
     ) external returns (uint256 amountA, uint256 amountB);
 
-    /// @notice Remove liquidity of a token and WETH (returned as ETH) from a Pool
+    /// @notice Remove liquidity of a token and WHSK (returned as HSK) from a Pool
     /// @param token            .
     /// @param stable           True if pool is stable, false if volatile
     /// @param liquidity        Amount of liquidity to remove
@@ -223,7 +217,7 @@ interface IRouter {
     /// @param deadline         Deadline to receive liquidity
     /// @return amountToken     Amount of token received
     /// @return amountETH       Amount of ETH received
-    function removeLiquidityETH(
+    function removeLiquidityHSK(
         address token,
         bool stable,
         uint256 liquidity,
@@ -233,7 +227,7 @@ interface IRouter {
         uint256 deadline
     ) external returns (uint256 amountToken, uint256 amountETH);
 
-    /// @notice Remove liquidity of a fee-on-transfer token and WETH (returned as ETH) from a Pool
+    /// @notice Remove liquidity of a fee-on-transfer token and WHSK (returned as HSK) from a Pool
     /// @param token            .
     /// @param stable           True if pool is stable, false if volatile
     /// @param liquidity        Amount of liquidity to remove
@@ -242,7 +236,7 @@ interface IRouter {
     /// @param to               Recipient of liquidity token
     /// @param deadline         Deadline to receive liquidity
     /// @return amountETH       Amount of ETH received
-    function removeLiquidityETHSupportingFeeOnTransferTokens(
+    function removeLiquidityHSKSupportingFeeOnTransferTokens(
         address token,
         bool stable,
         uint256 liquidity,
@@ -275,21 +269,21 @@ interface IRouter {
     /// @param to           Recipient of the tokens received
     /// @param deadline     Deadline to receive tokens
     /// @return amounts     Array of amounts returned per route
-    function swapExactETHForTokens(
+    function swapExactHSKForTokens(
         uint256 amountOutMin,
         Route[] calldata routes,
         address to,
         uint256 deadline
     ) external payable returns (uint256[] memory amounts);
 
-    /// @notice Swap a token for WETH (returned as ETH)
+    /// @notice Swap a token for WHSK (returned as HSK)
     /// @param amountIn     Amount of token in
     /// @param amountOutMin Minimum amount of desired ETH
     /// @param routes       Array of trade routes used in the swap
     /// @param to           Recipient of the tokens received
     /// @param deadline     Deadline to receive tokens
     /// @return amounts     Array of amounts returned per route
-    function swapExactTokensForETH(
+    function swapExactTokensForHSK(
         uint256 amountIn,
         uint256 amountOutMin,
         Route[] calldata routes,
@@ -330,20 +324,20 @@ interface IRouter {
     /// @param routes       Array of trade routes used in the swap
     /// @param to           Recipient of the tokens received
     /// @param deadline     Deadline to receive tokens
-    function swapExactETHForTokensSupportingFeeOnTransferTokens(
+    function swapExactHSKForTokensSupportingFeeOnTransferTokens(
         uint256 amountOutMin,
         Route[] calldata routes,
         address to,
         uint256 deadline
     ) external payable;
 
-    /// @notice Swap a token for WETH (returned as ETH) supporting fee-on-transfer tokens
+    /// @notice Swap a token for WHSK (returned as HSK) supporting fee-on-transfer tokens
     /// @param amountIn     Amount of token in
     /// @param amountOutMin Minimum amount of desired ETH
     /// @param routes       Array of trade routes used in the swap
     /// @param to           Recipient of the tokens received
     /// @param deadline     Deadline to receive tokens
-    function swapExactTokensForETHSupportingFeeOnTransferTokens(
+    function swapExactTokensForHSKSupportingFeeOnTransferTokens(
         uint256 amountIn,
         uint256 amountOutMin,
         Route[] calldata routes,
@@ -363,7 +357,6 @@ interface IRouter {
     /// @param routesA      Route used to convert input token to tokenA
     /// @param routesB      Route used to convert input token to tokenB
     /// @param to           Address you wish to mint liquidity to.
-    /// @param stake        Auto-stake liquidity in corresponding gauge.
     /// @return liquidity   Amount of LP tokens created from zapping in.
     function zapIn(
         address tokenIn,
@@ -372,8 +365,7 @@ interface IRouter {
         Zap calldata zapInPool,
         Route[] calldata routesA,
         Route[] calldata routesB,
-        address to,
-        bool stake
+        address to
     ) external payable returns (uint256 liquidity);
 
     /// @notice Zap out a pool (B, C) into A.

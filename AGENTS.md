@@ -1,7 +1,7 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-The core protocol lives in `contracts/`, with feature folders (`factories/`, `gauges/`, `governance/`, `rewards/`) for modular code that mirrors on-chain responsibilities. Shared math, time, and token logic sits in `contracts/libraries/`. Deployment helpers and automation scripts are in `script/` (Foundry `.s.sol` and Hardhat `.ts`). Vendor packages live under `lib/`. Solidity integration tests are in `test/`, with reusable fixtures in `test/utils` and scenario coverage inside `test/e2e`.
+The core protocol lives in `contracts/`, with feature folders (`factories/`, `gauges/`, `governance/`, `rewards/`) for modular code that mirrors on-chain responsibilities. Shared math, time, and token logic sits in `contracts/libraries/`. Deployment helpers and automation scripts are in `script/` (Foundry `.s.sol`). Vendor packages live under `lib/`. Solidity integration tests are in `test/`, with reusable fixtures in `test/utils`.
 
 ## Build, Test & Development Commands
 Run `forge build` to compile all contracts to `out/`. Use `forge test -vv` for verbose diagnostics, or scope runs with `forge test --match-contract Router`. JavaScript-based tasks (ABI generation, coverage) can reuse `npx hardhat test`. Enforce formatting with `yarn format` and lint solidity best practices with `yarn lint`. Use the `:check` variants in CI or before pushing to avoid rewriting files.

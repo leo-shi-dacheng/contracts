@@ -6,7 +6,7 @@ Aerodrome 是部署在 Base 链上的下一代自动做市商 (AMM) 协议，由
 ## 2. 项目背景与目标
 - **愿景**：在 Coinbase 生态支持下，为 Base 链提供具备长期激励、专业治理与高流动性效率的公共基础设施。
 - **设计目标**：兼顾稳定资产与波动资产交易体验；通过 veNFT 锁仓机制绑定长期利益；建立可审计、可升级的工厂体系；支持专业化托管与委托治理。
-- **技术栈**：Solidity 0.8.19、Foundry 测试与部署工具链、Hardhat 辅助脚本、OpenZeppelin 安全库。代码以 Business Source License 1.1 授权，2025-06-01 转为 GPLv2。
+- **技术栈**：Solidity 0.8.19、Foundry 测试与部署工具链、OpenZeppelin 安全库。代码以 Business Source License 1.1 授权，2025-06-01 转为 GPLv2。
 
 ## 3. 核心架构概览
 ### 3.1 AMM 与流动性层

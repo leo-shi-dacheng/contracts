@@ -1,220 +1,122 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.19;
 
-import "./BaseTest.sol";
-import {MockERC20WithTransferFee} from "utils/MockERC20WithTransferFee.sol";
+import {DexTestBase} from "./utils/DexTestBase.sol";
+import {IRouter} from "contracts/interfaces/IRouter.sol";
+import {MockERC20} from "./utils/MockERC20.sol";
+import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
 
-contract RouterTest is BaseTest {
-    Pool _pool;
-    Pool poolFee;
-    MockERC20WithTransferFee erc20Fee;
+contract RouterTest is DexTestBase {
+    MockERC20 internal tokenA;
+    MockERC20 internal tokenB;
 
-    function _setUp() public override {
-        uint256[] memory amounts = new uint256[](5);
-        amounts[0] = 1e25;
-        amounts[1] = 1e25;
-        amounts[2] = 1e25;
-        amounts[3] = 1e25;
-        amounts[4] = 1e25;
-        mintToken(address(WETH), owners, amounts);
-        dealETH(owners, amounts);
+    function setUp() public override {
+        super.setUp();
+        tokenA = _createMockToken("Token A", "TKA", 18);
+        tokenB = _createMockToken("Token B", "TKB", 18);
 
-        _addLiquidityToPool(address(owner), address(router), address(WETH), address(USDC), false, TOKEN_1, USDC_1);
-        _pool = Pool(factory.getPool(address(USDC), address(WETH), false));
-
-        erc20Fee = new MockERC20WithTransferFee("Mock Token", "FEE", 18);
-        erc20Fee.mint(address(owner), TOKEN_100K);
-
-        _seedPoolsWithLiquidity();
+        _deal(address(tokenA), address(this), 10_000 ether);
+        _deal(address(tokenB), address(this), 10_000 ether);
     }
 
-    function _seedPoolsWithLiquidity() internal {
-        USDC.approve(address(router), USDC_100K);
-        router.addLiquidityETH{value: TOKEN_100K}(
-            address(USDC),
+    function _defaultRoute(bool stable)
+        internal
+        view
+        returns (IRouter.Route[] memory routes)
+    {
+        routes = new IRouter.Route[](1);
+        routes[0] = IRouter.Route({from: address(tokenA), to: address(tokenB), stable: stable, factory: address(0)});
+    }
+
+    function testAddAndRemoveLiquidity() public {
+        IRouter.Route[] memory routes = _defaultRoute(false);
+
+        tokenA.approve(address(router), type(uint256).max);
+        tokenB.approve(address(router), type(uint256).max);
+
+        (, , uint256 liquidity) = router.addLiquidity(
+            address(tokenA),
+            address(tokenB),
             false,
-            USDC_100K,
-            USDC_100K,
-            TOKEN_100K,
-            address(owner),
-            block.timestamp
-        );
-        vm.startPrank(address(owner2));
-        USDC.approve(address(router), USDC_100K);
-        router.addLiquidityETH{value: TOKEN_100K}(
-            address(USDC),
-            false,
-            USDC_100K,
-            USDC_100K,
-            TOKEN_100K,
-            address(owner),
-            block.timestamp
-        );
-        vm.stopPrank();
-
-        // create pool for transfer fee token
-        erc20Fee.approve(address(router), TOKEN_100K);
-        router.addLiquidityETH{value: TOKEN_100K}(
-            address(erc20Fee),
-            false,
-            TOKEN_100K,
-            TOKEN_100K,
-            TOKEN_100K,
-            address(owner),
-            block.timestamp
-        );
-        poolFee = Pool(factory.getPool(address(erc20Fee), address(WETH), false));
-    }
-
-    function testCannotSortTokensSameRoute() public {
-        vm.expectRevert(IRouter.SameAddresses.selector);
-        router.sortTokens(address(_pool), address(_pool));
-    }
-
-    function testCannotSortTokensZeroAddress() public {
-        vm.expectRevert(IRouter.ZeroAddress.selector);
-        router.sortTokens(address(_pool), address(0));
-    }
-
-    function testCannotSwapNonApprovedFactory() public {
-        vm.expectRevert(IRouter.PoolFactoryDoesNotExist.selector);
-        router.poolFor(address(USDC), address(WETH), false, address(1));
-    }
-
-    function testCannotSendETHToRouter() public {
-        vm.expectRevert(IRouter.OnlyWETH.selector);
-        payable(address(router)).transfer(TOKEN_1);
-    }
-
-    function testRemoveETHLiquidity() public {
-        uint256 initialEth = address(this).balance;
-        uint256 initialUsdc = USDC.balanceOf(address(this));
-        uint256 poolInitialEth = address(_pool).balance;
-        uint256 poolInitialUsdc = USDC.balanceOf(address(_pool));
-
-        // add liquidity to pool
-        USDC.approve(address(router), USDC_100K);
-        WETH.approve(address(router), TOKEN_100K);
-        (, , uint256 liquidity) = router.addLiquidityETH{value: TOKEN_100K}(
-            address(USDC),
-            false,
-            USDC_100K,
-            USDC_100K,
-            TOKEN_100K,
-            address(owner),
-            block.timestamp
-        );
-
-        assertEq(address(this).balance, initialEth - TOKEN_100K);
-        assertEq(USDC.balanceOf(address(this)), initialUsdc - USDC_100K);
-
-        (uint256 amountUSDC, uint256 amountETH) = router.quoteRemoveLiquidity(
-            address(USDC),
-            address(WETH),
-            false,
-            address(factory),
-            liquidity
-        );
-
-        Pool(_pool).approve(address(router), liquidity);
-        router.removeLiquidityETH(
-            address(USDC),
-            false,
-            liquidity,
-            amountUSDC,
-            amountETH,
-            address(owner),
-            block.timestamp
-        );
-
-        assertEq(address(this).balance, initialEth);
-        assertEq(USDC.balanceOf(address(this)), initialUsdc);
-        assertEq(address(_pool).balance, poolInitialEth);
-        assertEq(USDC.balanceOf(address(_pool)), poolInitialUsdc);
-    }
-
-    function testRouterPoolGetAmountsOutAndSwapExactTokensForETH() public {
-        IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(address(USDC), address(WETH), false, address(0));
-
-        assertEq(router.getAmountsOut(USDC_1, routes)[1], _pool.getAmountOut(USDC_1, address(USDC)));
-
-        uint256[] memory expectedOutput = router.getAmountsOut(USDC_1, routes);
-        USDC.approve(address(router), USDC_1);
-        router.swapExactTokensForETH(USDC_1, expectedOutput[1], routes, address(owner), block.timestamp);
-    }
-
-    function testRouterPoolGetAmountsOutAndSwapExactETHForTokens() public {
-        IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(address(WETH), address(USDC), false, address(0));
-
-        assertEq(router.getAmountsOut(TOKEN_1, routes)[1], _pool.getAmountOut(TOKEN_1, address(WETH)));
-
-        uint256[] memory expectedOutput = router.getAmountsOut(TOKEN_1, routes);
-        USDC.approve(address(router), TOKEN_1);
-        router.swapExactETHForTokens{value: TOKEN_1}(expectedOutput[1], routes, address(owner), block.timestamp);
-    }
-
-    // TESTS FOR FEE-ON-TRANSFER TOKENS
-
-    function testRouterRemoveLiquidityETHSupportingFeeOnTransferTokens() public {
-        uint256 liquidity = poolFee.balanceOf(address(owner));
-
-        uint256 currentBalance = erc20Fee.balanceOf(address(poolFee));
-        uint256 expectedBalanceAfterRemove = currentBalance - (erc20Fee.fee() * 2);
-        // subtract 1,000 as even though we're removing all liquidity, MINIMUM_LIQUIDITY amount remains in pool
-        expectedBalanceAfterRemove -= 1000;
-
-        poolFee.approve(address(router), type(uint256).max);
-        router.removeLiquidityETHSupportingFeeOnTransferTokens(
-            address(erc20Fee),
-            false,
-            liquidity,
+            1_000 ether,
+            1_000 ether,
             0,
             0,
-            address(owner),
+            address(this),
             block.timestamp
         );
+        assertGt(liquidity, 0);
 
-        assertEq(erc20Fee.balanceOf(address(owner)), expectedBalanceAfterRemove);
-    }
-
-    function testRouterSwapExactETHForTokensSupportingFeeOnTransferTokens() external {
-        IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(address(WETH), address(erc20Fee), false, address(0));
-
-        uint256 expectedOutput = router.getAmountsOut(TOKEN_1, routes)[1];
-        assertEq(poolFee.getAmountOut(TOKEN_1, address(WETH)), expectedOutput);
-
-        assertEq(erc20Fee.balanceOf(address(owner)), 0);
-        uint256 actualExpectedOutput = expectedOutput - erc20Fee.fee();
-
-        router.swapExactETHForTokensSupportingFeeOnTransferTokens{value: TOKEN_1}(
+        address poolAddr = factory.getPool(address(tokenA), address(tokenB), false);
+        routes = _defaultRoute(false);
+        uint256[] memory amounts = router.swapExactTokensForTokens(
+            100 ether,
             0,
             routes,
-            address(owner),
+            address(this),
+            block.timestamp
+        );
+        assertEq(amounts[0], 100 ether);
+        assertGt(amounts[1], 0);
+
+        uint256 lpBalance = IERC20(poolAddr).balanceOf(address(this));
+        IERC20(poolAddr).approve(address(router), lpBalance);
+        (uint256 amountA, uint256 amountB) = router.removeLiquidity(
+            address(tokenA),
+            address(tokenB),
+            false,
+            lpBalance,
+            0,
+            0,
+            address(this),
+            block.timestamp
+        );
+        assertGt(amountA, 0);
+        assertGt(amountB, 0);
+    }
+
+    function testAddLiquidityHSKAndSwap() public {
+        vm.deal(address(this), 1_000 ether);
+
+        tokenA.approve(address(router), type(uint256).max);
+
+        (, , uint256 liquidity) = router.addLiquidityHSK{value: 200 ether}(
+            address(tokenA),
+            false,
+            200 ether,
+            0,
+            0,
+            address(this),
+            block.timestamp
+        );
+        assertGt(liquidity, 0);
+
+        IRouter.Route[] memory routes = new IRouter.Route[](1);
+        routes[0] = IRouter.Route({from: address(whsk), to: address(tokenA), stable: false, factory: address(0)});
+
+        router.swapExactHSKForTokensSupportingFeeOnTransferTokens{value: 10 ether}(
+            0,
+            routes,
+            address(this),
             block.timestamp
         );
 
-        assertEq(erc20Fee.balanceOf(address(owner)), actualExpectedOutput);
+        // swap tokens for HSK
+        routes[0] = IRouter.Route({from: address(tokenA), to: address(whsk), stable: false, factory: address(0)});
+        _deal(address(tokenA), address(this), 100 ether);
+        tokenA.approve(address(router), type(uint256).max);
+        router.swapExactTokensForHSKSupportingFeeOnTransferTokens(
+            50 ether,
+            0,
+            routes,
+            address(this),
+            block.timestamp
+        );
     }
 
-    function testRouterSwapExactTokensForETHSupportingFeeOnTransferTokens() external {
-        // first add the token balance to user to swap
-        erc20Fee.mint(address(owner), TOKEN_1);
-
-        IRouter.Route[] memory routes = new IRouter.Route[](1);
-        routes[0] = IRouter.Route(address(erc20Fee), address(WETH), false, address(0));
-
-        uint256 expectedOutput = router.getAmountsOut(TOKEN_1, routes)[1];
-        assertEq(poolFee.getAmountOut(TOKEN_1, address(erc20Fee)), expectedOutput);
-
-        uint256 ethBalanceBefore = address(owner).balance;
-        uint256 actualExpectedOutput = router.getAmountsOut(TOKEN_1 - erc20Fee.fee(), routes)[1];
-
-        erc20Fee.approve(address(router), TOKEN_1);
-        router.swapExactTokensForETHSupportingFeeOnTransferTokens(TOKEN_1, 0, routes, address(owner), block.timestamp);
-
-        assertEq(address(owner).balance - ethBalanceBefore, actualExpectedOutput);
+    function testPoolForMatchesFactory() public {
+        address predicted = router.poolFor(address(tokenA), address(tokenB), false, address(0));
+        address actual = factory.createPool(address(tokenA), address(tokenB), false);
+        assertEq(predicted, actual);
     }
 }

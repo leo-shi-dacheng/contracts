@@ -38,7 +38,7 @@ Aerodrome 协议是 Velodrome Finance 团队在 Base 链上的重要部署，代
 ### 1.3 技术栈
 
 - **智能合约**: Solidity 0.8.19
-- **开发框架**: Foundry + Hardhat
+- **开发框架**: Foundry
 - **测试框架**: Foundry Test Suite
 - **部署网络**: Base 主网
 - **许可证**: Business Source License 1.1 (将于 2025-06-01 转为 GPL v2.0)

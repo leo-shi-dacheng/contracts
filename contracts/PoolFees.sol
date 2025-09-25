@@ -10,8 +10,8 @@ import {SafeERC20} from "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol
 contract PoolFees {
     using SafeERC20 for IERC20;
     address internal immutable pool; // The pool it is bonded to
-    address internal immutable token0; // token0 of pool, saved localy and statically for gas optimization
-    address internal immutable token1; // Token1 of pool, saved localy and statically for gas optimization
+    address internal immutable token0; // token0 of pool, saved locally and statically for gas optimization
+    address internal immutable token1; // token1 of pool, saved locally and statically for gas optimization
 
     error NotPool();
 
@@ -26,5 +26,20 @@ contract PoolFees {
         if (msg.sender != pool) revert NotPool();
         if (_amount0 > 0) IERC20(token0).safeTransfer(_recipient, _amount0);
         if (_amount1 > 0) IERC20(token1).safeTransfer(_recipient, _amount1);
+    }
+
+    /// @notice Returns the pool this fee contract is paired with
+    function poolAddress() external view returns (address) {
+        return pool;
+    }
+
+    /// @notice Returns token0 tracked by this fee contract
+    function token0Address() external view returns (address) {
+        return token0;
+    }
+
+    /// @notice Returns token1 tracked by this fee contract
+    function token1Address() external view returns (address) {
+        return token1;
     }
 }

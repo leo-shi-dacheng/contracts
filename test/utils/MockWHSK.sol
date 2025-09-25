@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: BUSL-1.1
 pragma solidity 0.8.19;
 
-import {IWETH} from "contracts/interfaces/IWETH.sol";
+import {IWHsk} from "contracts/interfaces/IWHsk.sol";
 import {ERC20} from "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
 /// @dev Modified lightly from live deployed WETH contract as WETH9 is not a standard ERC20
-contract MockWETH is IWETH {
-    string public name = "Wrapped Ether";
-    string public symbol = "WETH";
+contract MockWHSK is IWHsk {
+    string public name = "Wrapped HSK";
+    string public symbol = "WHSK";
     uint8 public decimals = 18;
 
     event Deposit(address indexed dst, uint256 wad);

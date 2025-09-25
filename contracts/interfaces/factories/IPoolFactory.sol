@@ -5,7 +5,6 @@ interface IPoolFactory {
     event SetFeeManager(address feeManager);
     event SetPauser(address pauser);
     event SetPauseState(bool state);
-    event SetVoter(address voter);
     event PoolCreated(address indexed token0, address indexed token1, bool indexed stable, address pool, uint256);
     event SetCustomFee(address indexed pool, uint256 fee);
 
@@ -14,7 +13,6 @@ interface IPoolFactory {
     error InvalidPool();
     error NotFeeManager();
     error NotPauser();
-    error NotVoter();
     error PoolAlreadyExists();
     error SameAddress();
     error ZeroFee();
@@ -39,12 +37,6 @@ interface IPoolFactory {
     /// @param tokenB .
     /// @param fee  1 if stable, 0 if volatile, else returns address(0)
     function getPool(address tokenA, address tokenB, uint24 fee) external view returns (address);
-
-    /// @dev Only called once to set to Voter.sol - Voter does not have a function
-    ///      to call this contract method, so once set it's immutable.
-    ///      This also follows convention of setVoterAndDistributor() in VotingEscrow.sol
-    /// @param _voter .
-    function setVoter(address _voter) external;
 
     function setPauser(address _pauser) external;
 
@@ -83,7 +75,7 @@ interface IPoolFactory {
 
     function isPaused() external view returns (bool);
 
-    function voter() external view returns (address);
+    function pauser() external view returns (address);
 
     function implementation() external view returns (address);
 }
