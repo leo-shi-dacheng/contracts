@@ -4,6 +4,7 @@ out = 'out'
 via_ir = true
 optimizer = true
 optimizer_runs = 200
+solc_version = '0.8.20'
 
 fs_permissions = [{ access = "read-write", path = "./"}]
 
@@ -11,6 +12,7 @@ fs_permissions = [{ access = "read-write", path = "./"}]
 via_ir = false
 optimizer = true
 optimizer_runs = 50
+solc_version = '0.8.20'
 
 [rpc_endpoints]
 base = "${BASE_RPC_URL}"
